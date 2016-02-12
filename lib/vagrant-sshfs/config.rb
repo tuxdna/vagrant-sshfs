@@ -8,6 +8,8 @@ module Vagrant
       attr_accessor :sudo
       attr_accessor :mount_on_guest
       attr_accessor :host_addr
+      attr_accessor :host_port
+      attr_accessor :password_prompt
 
       def initialize
         @paths = {}
