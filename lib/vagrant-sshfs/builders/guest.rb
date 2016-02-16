@@ -29,34 +29,59 @@ module Vagrant
           # on the vagrant box to port 22 on the host. Run in the
           # background (-f) so the ssh call won't hang forever and
           # sleep forever so the tunnel will stay up.
-          cmd  = 'ssh '
-          cmd += '-f '
-          cmd += "-l #{ssh_info[:username]} "
-          cmd += "-p #{ssh_info[:port]} "
-          cmd += "-R 10022:localhost:22 "
-          cmd += '-o Compression=yes '
-          cmd += '-o StrictHostKeyChecking=no '
-          cmd += '-o ControlMaster=no '
-#cmd += '-o Ciphers=arcfour '
-          cmd += "-o IdentityFile=#{ssh_info[:private_key_path][0]} "
-          cmd += "-o ProxyCommand=\"#{ssh_info[:proxy_command]}\" " if ssh_info[:proxy_command]
-          cmd += "#{ssh_info[:host]} "
-          cmd += "sleep infinity"
+          
+          username = ssh_info[:username]
+          port  = ssh_info[:port]
+          host = ssh_info[:host]
+          proxy_command = ssh_info[:proxy_command]
+          id_file = ssh_info[:private_key_path][0]
+         
+          cmd = ['ssh']
+          cmd.concat(
+            [
+              '-f', # Requests ssh to go to background just before command execution. 
+              '-R 10022:localhost:22',
+              '-o Compression=yes',
+              '-o StrictHostKeyChecking=no',
+              '-o ControlMaster=no',
+              # '-o Ciphers=arcfour ', # TODO: evaluate usefullness of having this cypher?
+              "-o IdentityFile=#{id_file}",
+              "-l #{username}",
+              "-p #{port}"
+            ])
+          
+          cmd.push(%Q|-o ProxyCommand="#{proxy_command}"|) if proxy_command
+            
+          cmd.concat([host, "sleep infinity"])
 
           info("trying to forward remote ports.")
-          info("cmd: #{cmd.split()}")
+          info("cmd: #{cmd.join(" ")}")
 
-          result = Vagrant::Util::Subprocess.execute(*cmd.split())
+
+          result = Vagrant::Util::Subprocess.execute(*cmd)
           if result.exit_code != 0
              print("bad stuff")
           end
         end
 
         def install_sshfs()
-          info("trying to install sshfs rpm.")
-         #machine.communicate.execute("yum install -y epel-release", sudo: true)
-         #machine.communicate.execute("yum install -y sshfs", sudo: true)
-          machine.communicate.execute("dnf install -y sshfs", sudo: true)
+          if machine.communicate.test("type sshfs")
+            return # already installed
+          end
+          
+          info("Checking if we can install SSHFS inside the guest VM")
+          if machine.communicate.test("type dnf")
+            info("now installing SSHFS inside the guest VM")
+            machine.communicate.execute("dnf install -y epel-release", sudo: true)
+            machine.communicate.execute("dnf install -y sshfs", sudo: true)
+          elsif machine.communicate.test("type yum")
+            info("now installing SSHFS inside the guest VM")
+            machine.communicate.execute("yum install -y epel-release", sudo: true)
+            machine.communicate.execute("yum install -y sshfs", sudo: true)
+          else
+            error("SSHFS not found on the VM. Please install it first.")
+          end
+
         end
 
 
@@ -115,24 +140,46 @@ module Vagrant
           #  - allow_other - allows access to other users on guest
           # Some performance options from:
           # http://www.linux-magazine.com/Issues/2014/165/SSHFS-MUX
-          options = '-o StrictHostKeyChecking=no '
-          options+= "-p #{port} "
-          options+= '-o allow_other '
-          options+= '-o noauto_cache '
           #options+= '-o kernel_cache -o Ciphers=arcfour -o big_writes -o auto_cache -o cache_timeout=115200 -o attr_timeout=115200 -o entry_timeout=1200 -o max_readahead=90000 '
           #options+= '-o kernel_cache -o big_writes -o auto_cache -o cache_timeout=115200 -o attr_timeout=115200 -o entry_timeout=1200 -o max_readahead=90000 '
           #options+= '-o cache_timeout=3600 '
+          
+          cmd = [
+            'sshfs',
+            '-o StrictHostKeyChecking=no',
+            "-p #{port}",
+            '-o allow_other',
+            '-o noauto_cache'
+            ]
+
+            
+          # TODO: Ensure that SSH daemon is always running on the HOST.
+          # TODO: Check it before `vagrant sshfs` attempts to mount the filesystem.
 
           # Grab password if necessary
           sshpass = password()
           echopipe = ""
           if sshpass
             echopipe= "echo " + sshpass + " | "
-            options+= '-o password_stdin '
+            cmd.push('-o password_stdin')
           end
-
+          
+          host_address = host
+          if host_address.empty?
+            info("Host not specified in the configuration file. Picking up localhost.")
+            host_address = "localhost"
+          end
+          
+          cmd.push("#{username}@#{host_address}:#{source} #{target}")
+          
+          sshfs_command = cmd.join(" ")
+          exec_command = echopipe + sshfs_command
+          
+          info(exec_command)
+          
+          info("Exec Command: "+exec_command)
           status = machine.communicate.execute(
-            echopipe + "sshfs " + options + "#{username}@#{host}:#{source} #{target}",
+            exec_command,
             :sudo => true, :error_check => false)
 
           if status != 0
