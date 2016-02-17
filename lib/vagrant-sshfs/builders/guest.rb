@@ -148,10 +148,10 @@ module Vagrant
           
           cmd = [
             'sshfs',
-            '-o StrictHostKeyChecking=no',
-            "-p #{port}",
-            '-o allow_other',
-            '-o noauto_cache'
+            '-p', port,
+            '-o', 'StrictHostKeyChecking=no',
+            '-o', 'allow_other',
+            '-o', 'noauto_cache'
             ]
 
             
@@ -163,7 +163,7 @@ module Vagrant
           echopipe = ""
           if sshpass
             echopipe= "echo " + sshpass + " | "
-            cmd.push('-o password_stdin')
+            cmd.concat(['-o', 'password_stdin'])
           end
           
           host_address = host
@@ -185,6 +185,7 @@ module Vagrant
             :sudo => true, :error_check => false)
 
           if status != 0
+            info("Please check if SSH server is running on the Host machine.")
             error('not_mounted', src: source, target: target)
           end
         end
