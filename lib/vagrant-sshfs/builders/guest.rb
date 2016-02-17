@@ -47,7 +47,7 @@ module Vagrant
               # '-o Ciphers=arcfour ', # TODO: evaluate usefullness of having this cypher?
               '-o', "IdentityFile=#{id_file}",
               '-l', username,
-              '-p', port
+              '-p', "#{port}"
             ])
           
           if proxy_command
