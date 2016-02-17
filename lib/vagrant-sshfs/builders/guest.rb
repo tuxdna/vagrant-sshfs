@@ -40,17 +40,19 @@ module Vagrant
           cmd.concat(
             [
               '-f', # Requests ssh to go to background just before command execution. 
-              '-R 10022:localhost:22',
-              '-o Compression=yes',
-              '-o StrictHostKeyChecking=no',
-              '-o ControlMaster=no',
+              '-R', '10022:localhost:22',
+              '-o', 'Compression=yes',
+              '-o', 'StrictHostKeyChecking=no',
+              '-o', 'ControlMaster=no',
               # '-o Ciphers=arcfour ', # TODO: evaluate usefullness of having this cypher?
-              "-o IdentityFile=#{id_file}",
-              "-l #{username}",
-              "-p #{port}"
+              '-o', "IdentityFile=#{id_file}",
+              '-l', username,
+              '-p', port
             ])
           
-          cmd.push(%Q|-o ProxyCommand="#{proxy_command}"|) if proxy_command
+          if proxy_command
+            cmd.push(%Q|-o ProxyCommand="#{proxy_command}"|)
+          end
             
           cmd.concat([host, "sleep infinity"])
 
@@ -60,7 +62,7 @@ module Vagrant
 
           result = Vagrant::Util::Subprocess.execute(*cmd)
           if result.exit_code != 0
-             print("bad stuff")
+            error("bad stuff")
           end
         end
 
